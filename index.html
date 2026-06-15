@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地震岩盤崩壊シミュレータ | Rock Fracture Earthquake Simulator</title>
+<meta name="description" content="六角形グリッドで岩盤の連鎖崩壊をシミュレート。Wells &amp; Coppersmith式でマグニチュードを算出し、G-R則・大森則を可視化します。">
+<meta property="og:title" content="地震岩盤崩壊シミュレータ">
+<meta property="og:description" content="六角形グリッドで岩盤の連鎖崩壊をシミュレート。マグニチュードの対数スケールが体感できる教育アプリ。">
+<meta property="og:image" content="https://earthquake.meetupsensei.com/ogp.jpg">
+<meta property="og:url" content="https://earthquake.meetupsensei.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="meetupsensei.com">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="地震岩盤崩壊シミュレータ">
+<meta name="twitter:description" content="六角形グリッドで岩盤の連鎖崩壊をシミュレート。マグニチュードの対数スケールが体感できる教育アプリ。">
+<meta name="twitter:image" content="https://earthquake.meetupsensei.com/ogp.jpg">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#ffffff;--bg1:#f4f4f2;--bg2:#e2e2de;
+  --tx0:#1a1a1a;--tx1:#3a3a3a;--tx2:#777;
+  --bd:#b8b8b2;--bd2:#909088;
+  --red:#C83C2D;--orange:#d4780a;--green:#3B6D11;--blue:#185FA5;
+  --hex-normal:#5B9BD5;--hex-shake:#F4A340;--hex-collapse:#C83C2D;--hex-stable:#6B7A80;
+  --btn-bg:#e8e8e4;--btn-bd:#a8a8a2;--btn-tx:#1a1a1a;--btn-hv:#dcdcd8
+}
+.dark-mode{
+  --bg0:#1e1e1e;--bg1:#282828;--bg2:#323232;
+  --tx0:#f0f0ee;--tx1:#bbb;--tx2:#888;
+  --bd:#444;--bd2:#666;
+  --red:#e05a4a;--orange:#f4a340;--green:#7abf3a;--blue:#5B9BD5;
+  --hex-normal:#3a6a9a;--hex-shake:#b07020;--hex-collapse:#9a2a1e;--hex-stable:#4a5a60;
+  --btn-bg:#383838;--btn-bd:#606060;--btn-tx:#eeeeee;--btn-hv:#424242
+}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg0);color:var(--tx0);transition:background 0.2s,color 0.2s}
+#app{max-width:740px;margin:0 auto;padding:1.25rem 1rem 2rem}
+
+#topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+#topbar-left{display:flex;flex-direction:column;gap:2px}
+#topbar-title{font-size:16px;font-weight:600;color:var(--tx0)}
+#topbar-sub{font-size:11px;color:var(--tx2)}
+#topbar-controls{display:flex;gap:6px}
+
+.btn,select,.toggle-btn{
+  font-size:12px;font-weight:500;
+  padding:5px 12px;
+  border:1px solid var(--btn-bd);
+  border-radius:6px;
+  background:var(--btn-bg);
+  color:var(--btn-tx);
+  cursor:pointer;
+  line-height:1.4;
+  transition:background 0.12s,border-color 0.12s
+}
+.toggle-btn{border-radius:20px;display:inline-flex;align-items:center;gap:5px}
+.btn:hover,.toggle-btn:hover,select:hover{background:var(--btn-hv);border-color:var(--bd2)}
+
+.ctrl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.ctrl-label{font-size:12px;color:var(--tx2);white-space:nowrap}
+
+#canvas-wrap{border:1px solid var(--btn-bd);border-radius:8px;overflow:hidden;background:var(--bg1);display:flex;justify-content:center;cursor:pointer;width:100%}
+canvas#c{display:block;max-width:100%;height:auto}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--tx2);margin-top:6px;align-items:center}
+.leg{display:flex;align-items:center;gap:4px}
+.leg-dot{width:12px;height:12px;border-radius:2px;flex-shrink:0}
+
+#calc-panel{margin-top:10px;border:1px solid var(--btn-bd);border-radius:8px;background:var(--bg0);overflow:hidden}
+#calc-header{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg1);border-bottom:1px solid var(--btn-bd);cursor:pointer;user-select:none}
+#calc-header-title{font-size:13px;font-weight:500;color:var(--tx0)}
+#calc-toggle{font-size:11px;color:var(--tx2)}
+#calc-body{padding:12px 14px;display:none;flex-direction:column;gap:10px}
+.calc-step{display:flex;gap:10px;align-items:flex-start}
+.step-num{width:22px;height:22px;border-radius:50%;background:var(--bg2);border:1px solid var(--btn-bd);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--tx1);flex-shrink:0;margin-top:1px}
+.step-body{flex:1}
+.step-title{font-size:12px;font-weight:500;color:var(--tx0);margin-bottom:4px}
+.formula-box{background:var(--bg1);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--tx1);line-height:1.9}
+.formula-box .f-formula{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;color:var(--tx0)}
+.formula-box .f-result{font-size:14px;font-weight:500;margin-top:4px;padding-top:4px;border-top:1px solid var(--btn-bd)}
+.f-hi{color:var(--red);font-weight:500}
+.f-blue{color:var(--blue);font-weight:500}
+.f-green{color:var(--green);font-weight:500}
+.calc-arrow{text-align:center;color:var(--tx2);font-size:14px;line-height:1;margin:-4px 0}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.stat{background:var(--bg1);border-radius:6px;padding:9px 11px}
+.stat-label{font-size:11px;color:var(--tx2);margin-bottom:2px}
+.stat-val{font-size:20px;font-weight:600;color:var(--tx0)}
+
+.tabs{display:flex;margin-top:10px;border:1px solid var(--btn-bd);border-radius:6px;overflow:hidden;width:fit-content}
+.tab{font-size:12px;padding:5px 14px;border:none;background:var(--btn-bg);color:var(--tx2);cursor:pointer;border-right:1px solid var(--btn-bd);font-weight:500}
+.tab:last-child{border-right:none}
+.tab.active{background:var(--bg2);color:var(--tx0)}
+canvas.chart{display:block;border:1px solid var(--btn-bd);border-radius:6px;background:var(--bg0);margin-top:8px;max-width:100%}
+.chart-info{font-size:12px;color:var(--tx2);margin-top:6px;padding:7px 10px;border:1px solid var(--btn-bd);border-radius:6px;line-height:1.7;background:var(--bg0)}
+.ref-box{font-size:11px;color:var(--tx2);margin-top:10px;padding:8px 10px;border-left:2px solid var(--bd2);background:var(--bg1);border-radius:0 6px 6px 0;line-height:1.9}
+
+footer{text-align:center;font-size:11px;color:var(--tx2);margin-top:24px;padding-top:16px;border-top:1px solid var(--btn-bd)}
+footer a{color:var(--blue);text-decoration:none}
+
+@media(max-width:600px){
+  .stat-row{grid-template-columns:repeat(2,1fr)}
+  .ctrl-row{gap:6px}
+  #topbar-title{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="topbar">
+  <div id="topbar-left">
+    <div id="topbar-title">地震岩盤崩壊シミュレータ</div>
+    <div id="topbar-sub">meetupsensei.com / ざたん（野崎浩平）</div>
+  </div>
+  <div id="topbar-controls">
+    <div class="toggle-btn" id="btn-lang"><span>🌐</span><span id="lang-label">EN</span></div>
+    <div class="toggle-btn" id="btn-dark"><span id="dark-icon">🌙</span><span id="dark-label">Dark</span></div>
+  </div>
+</div>
+
+<div class="ctrl-row">
+  <span class="ctrl-label" data-i="label_strength">岩盤強度:</span>
+  <select id="sel-strength">
+    <option value="hard" data-i="opt_hard">硬岩（崩れにくい）</option>
+    <option value="normal" selected data-i="opt_normal">標準</option>
+    <option value="soft" data-i="opt_soft">軟弱地盤（崩れやすい）</option>
+  </select>
+  <span class="ctrl-label" data-i="label_prob">伝播確率:</span>
+  <select id="sel-prob">
+    <option value="0.3">30%</option>
+    <option value="0.45" selected>45%</option>
+    <option value="0.6">60%</option>
+    <option value="0.75">75%</option>
+  </select>
+  <button id="btn-reset" class="btn" data-i="btn_reset">リセット</button>
+  <button id="btn-auto" class="btn" data-i="btn_auto">▶ 100回自動実行</button>
+</div>
+
+<div id="canvas-wrap"><canvas id="c" width="700" height="304"></canvas></div>
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:var(--hex-normal)"></div><span data-i="leg_normal">正常</span></div>
+  <div class="leg"><div class="leg-dot" style="background:var(--hex-shake)"></div><span data-i="leg_shake">破壊中</span></div>
+  <div class="leg"><div class="leg-dot" style="background:var(--hex-collapse)"></div><span data-i="leg_collapse">崩壊</span></div>
+  <div class="leg"><div class="leg-dot" style="background:var(--hex-stable)"></div><span data-i="leg_stable">持ちこたえ</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#888"></div><span data-i="leg_epi">震源</span></div>
+  <span style="font-size:11px;color:var(--tx2)" data-i="hint_click">← クリックで震源を指定</span>
+</div>
+
+<div id="calc-panel">
+  <div id="calc-header">
+    <span id="calc-header-title" data-i="calc_title">📐 計算の中身を見る</span>
+    <span id="calc-toggle">▼ <span data-i="calc_open">開く</span></span>
+  </div>
+  <div id="calc-body">
+    <div id="step-waiting" style="font-size:13px;color:var(--tx2);padding:4px 0" data-i="calc_waiting">グリッドをクリックするとここに計算過程が表示されます。</div>
+    <div id="steps" style="display:none;flex-direction:column;gap:10px">
+      <div class="calc-step"><div class="step-num">1</div><div class="step-body">
+        <div class="step-title" data-i="step1_title">崩壊セル数を数える</div>
+        <div class="formula-box">
+          <div data-i="step1_desc">六角形1マス ＝ <span class="f-blue">約0.25 km²</span> と仮定</div>
+          <div class="f-formula">N = <span id="c-cells" class="f-hi">—</span> <span data-i="step1_unit">個</span></div>
+          <div class="f-result">S = <span id="c-cells2" class="f-hi">—</span> × 0.25 = <span id="c-S" class="f-hi">— km²</span></div>
+        </div>
+      </div></div>
+      <div class="calc-arrow">↓</div>
+      <div class="calc-step"><div class="step-num">2</div><div class="step-body">
+        <div class="step-title" data-i="step2_title">Wells &amp; Coppersmith (1994) スケーリング則</div>
+        <div class="formula-box">
+          <div data-i="step2_desc">断層破壊面積 S → モーメントマグニチュード Mw：</div>
+          <div class="f-formula" style="margin-top:4px">Mw = 0.98 × log₁₀(S) + 4.07</div>
+          <div style="margin-top:6px" data-i="step2_sub">代入すると：</div>
+          <div class="f-formula">= 0.98 × log₁₀(<span id="c-S2" class="f-blue">—</span>) + 4.07</div>
+          <div class="f-formula">= 0.98 × <span id="c-logS" class="f-blue">—</span> + 4.07</div>
+          <div class="f-result">→ Mw ≈ <span id="c-Mw" class="f-hi">—</span></div>
+        </div>
+      </div></div>
+      <div class="calc-arrow">↓</div>
+      <div class="calc-step"><div class="step-num">3</div><div class="step-body">
+        <div class="step-title" data-i="step3_title">対数スケールで感じる「M1の差」</div>
+        <div class="formula-box">
+          <div data-i="step3_desc">エネルギーはM1増えると約 <span class="f-hi">32倍</span>、M2で約 <span class="f-hi">1000倍</span></div>
+          <div class="f-formula" style="margin-top:4px">Energy ratio = 10^(1.5 × ΔM)</div>
+          <div class="f-formula" style="margin-top:6px">M = <span id="c-Mw2" class="f-hi">—</span></div>
+          <div class="f-formula"><span data-i="step3_vs">M5.0との比較</span> → <span id="c-eratio" class="f-green">—</span> <span data-i="step3_times">倍</span></div>
+          <div id="c-comment" class="f-result" style="color:var(--tx2)">—</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-label" data-i="stat_cells">崩壊セル数</div><div class="stat-val" id="v-cells">—</div></div>
+  <div class="stat"><div class="stat-label" data-i="stat_mag">推定M</div><div class="stat-val" id="v-mag">—</div></div>
+  <div class="stat"><div class="stat-label" data-i="stat_trials">総実行回数</div><div class="stat-val" id="v-trials">0</div></div>
+  <div class="stat"><div class="stat-label" data-i="stat_maxmag">最大M（累計）</div><div class="stat-val" id="v-maxmag">—</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="gr" data-i="tab_gr">G-R則（M分布）</div>
+  <div class="tab" data-tab="omori" data-i="tab_omori">大森則（余震減衰）</div>
+</div>
+<div id="tab-gr">
+  <canvas class="chart" id="chart-gr" width="700" height="200"></canvas>
+  <div id="chart-info" class="chart-info" data-i="gr_hint">シミュレーションを実行するとG-R則グラフが表示されます。</div>
+</div>
+<div id="tab-omori" style="display:none">
+  <canvas class="chart" id="chart-omori" width="700" height="200"></canvas>
+  <div id="chart-info-omori" class="chart-info" data-i="omori_hint">大きな地震（M≥5）が起きると余震グラフが更新されます。</div>
+</div>
+
+<div class="ref-box">
+  <strong data-i="ref_title">参考文献：</strong>
+  <span data-i="ref_body">① Wells &amp; Coppersmith (1994) Bull. Seismol. Soc. Am. 84, 974-1002 &nbsp;② Gutenberg &amp; Richter (1944) — log N = a − b·M &nbsp;③ Omori (1894) — n(t)=k/(c+t) &nbsp;④ 武村 (1998)</span>
+</div>
+
+<footer data-i="footer">
+  制作：のざたん／ <a href="https://meetupsensei.com" target="_blank" rel="noopener">meetupsensei.com</a> &nbsp;|&nbsp; 教育目的のシミュレーターです
+</footer>
+
+</div>
+
+<script>
+const I18N={
+  ja:{
+    topbar_title:'地震岩盤崩壊シミュレータ',
+    label_strength:'岩盤強度:',label_prob:'伝播確率:',
+    opt_hard:'硬岩（崩れにくい）',opt_normal:'標準',opt_soft:'軟弱地盤（崩れやすい）',
+    btn_reset:'リセット',btn_auto:'▶ 100回自動実行',
+    leg_normal:'正常',leg_shake:'破壊中',leg_collapse:'崩壊',leg_stable:'持ちこたえ',leg_epi:'震源',
+    hint_click:'← クリックで震源を指定',
+    calc_title:'📐 計算の中身を見る',calc_open:'開く',calc_close:'閉じる',
+    calc_waiting:'グリッドをクリックするとここに計算過程が表示されます。',
+    step1_title:'崩壊セル数を数える',
+    step1_desc:'六角形1マス ＝ <span class="f-blue">約0.25 km²</span> と仮定',
+    step1_unit:'個',
+    step2_title:'Wells & Coppersmith (1994) スケーリング則',
+    step2_desc:'断層破壊面積 S → モーメントマグニチュード Mw：',
+    step2_sub:'代入すると：',
+    step3_title:'対数スケールで感じる「M1の差」',
+    step3_desc:'エネルギーはM1増えると約 <span class="f-hi">32倍</span>、M2で約 <span class="f-hi">1000倍</span>',
+    step3_vs:'M5.0との比較',step3_times:'倍',
+    stat_cells:'崩壊セル数',stat_mag:'推定M',stat_trials:'総実行回数',stat_maxmag:'最大M（累計）',
+    tab_gr:'G-R則（M分布）',tab_omori:'大森則（余震減衰）',
+    gr_hint:'シミュレーションを実行するとG-R則グラフが表示されます。',
+    omori_hint:'大きな地震（M≥5）が起きると余震グラフが更新されます。',
+    ref_title:'参考文献：',
+    ref_body:'① Wells & Coppersmith (1994) Bull. Seismol. Soc. Am. 84, 974-1002 &nbsp;② Gutenberg & Richter (1944) — log N = a − b·M &nbsp;③ Omori (1894) — n(t)=k/(c+t) &nbsp;④ 武村 (1998)',
+    comment:['微小地震（体に感じない）','小〜中規模地震（地域で感じる）','中規模地震（建物に影響）','大地震（広域で被害）','巨大地震（甚大な被害）'],
+    gr_label_x:'マグニチュード',gr_label_y:'累積頻度 N（対数）',
+    omori_label_x:'本震からの経過日数',omori_label_y:'余震発生頻度',
+    gr_result:(bv,n,maxM)=>`<strong>b値 = ${bv}</strong>　log N = a − b·M（G-R則、理論値 b≈1.0）<br>b値が低い → 大地震の割合が高い。実施 ${n} 回 / 最大 M${maxM}`,
+    omori_result:(mM,r7,r30,mAft)=>`<strong>M${mM}本震後の余震</strong>（大森則 n(t)=k/(c+t)^p, p=1.1）<br>7日後は直後の約 <strong>${r7}%</strong>、30日後は約 <strong>${r30}%</strong> に減衰。最大余震 ≈ M${mAft}（バース則）`,
+    day:'日',dark:'ダーク',light:'ライト',
+    footer:'制作：のざたん／ <a href="https://meetupsensei.com" target="_blank" rel="noopener">meetupsensei.com</a> &nbsp;|&nbsp; 教育目的のシミュレーターです'
+  },
+  en:{
+    topbar_title:'Rock Fracture Earthquake Simulator',
+    label_strength:'Rock strength:',label_prob:'Propagation:',
+    opt_hard:'Hard rock (resistant)',opt_normal:'Standard',opt_soft:'Soft ground (fragile)',
+    btn_reset:'Reset',btn_auto:'▶ Run 100 times',
+    leg_normal:'Intact',leg_shake:'Fracturing',leg_collapse:'Collapsed',leg_stable:'Survived',leg_epi:'Epicenter',
+    hint_click:'← Click grid to set epicenter',
+    calc_title:'📐 Show the math',calc_open:'Open',calc_close:'Close',
+    calc_waiting:'Click the grid to see the calculation steps here.',
+    step1_title:'Count collapsed cells',
+    step1_desc:'Each hexagon ≈ <span class="f-blue">0.25 km²</span>',
+    step1_unit:'cells',
+    step2_title:'Wells & Coppersmith (1994) scaling law',
+    step2_desc:'Rupture area S → Moment magnitude Mw:',
+    step2_sub:'Substituting:',
+    step3_title:'Feel the log scale: what does M+1 mean?',
+    step3_desc:'Energy increases ~<span class="f-hi">32×</span> per M unit, ~<span class="f-hi">1000×</span> per 2 units',
+    step3_vs:'Compared to M5.0',step3_times:'× more energy',
+    stat_cells:'Collapsed cells',stat_mag:'Est. Magnitude',stat_trials:'Total runs',stat_maxmag:'Max M (total)',
+    tab_gr:'G-R Law (M dist.)',tab_omori:"Omori's Law",
+    gr_hint:'Run a simulation to see the Gutenberg-Richter frequency-magnitude distribution.',
+    omori_hint:"A large earthquake (M≥5) will update the Omori's Law aftershock decay chart.",
+    ref_title:'References: ',
+    ref_body:'① Wells & Coppersmith (1994) Bull. Seismol. Soc. Am. 84, 974-1002 &nbsp;② Gutenberg & Richter (1944) — log N = a − b·M &nbsp;③ Omori (1894) — n(t)=k/(c+t) &nbsp;④ Takemura (1998)',
+    comment:['Micro-earthquake (not felt)','Minor–moderate (felt locally)','Moderate (structural effects)','Major earthquake (widespread damage)','Great earthquake (catastrophic)'],
+    gr_label_x:'Magnitude',gr_label_y:'Cumulative frequency N (log)',
+    omori_label_x:'Days since mainshock',omori_label_y:'Aftershock rate',
+    gr_result:(bv,n,maxM)=>`<strong>b-value = ${bv}</strong>　log N = a − b·M (G-R law, b≈1.0)<br>Lower b → more large earthquakes. Runs: ${n} / Max M${maxM}`,
+    omori_result:(mM,r7,r30,mAft)=>`<strong>Aftershock decay after M${mM}</strong> (Omori n(t)=k/(c+t)^p, p=1.1)<br>After 7d: ~<strong>${r7}%</strong>; after 30d: ~<strong>${r30}%</strong>. Largest aftershock ≈ M${mAft} (Båth's law)`,
+    day:'d',dark:'Dark',light:'Light',
+    footer:'Created by Nozatan / <a href="https://meetupsensei.com" target="_blank" rel="noopener">meetupsensei.com</a> &nbsp;|&nbsp; An educational simulator'
+  }
+};
+
+let lang='ja',dark=false,animating=false,trialData=[];
+const app=document.getElementById('app');
+function t(k){return I18N[lang][k]||k;}
+
+function applyI18n(){
+  document.getElementById('topbar-title').textContent=t('topbar_title');
+  document.getElementById('lang-label').textContent=lang==='ja'?'EN':'日本語';
+  document.getElementById('dark-label').textContent=dark?t('light'):t('dark');
+  document.getElementById('dark-icon').textContent=dark?'☀️':'🌙';
+  document.documentElement.lang=lang;
+  document.title=t('topbar_title');
+  document.querySelectorAll('[data-i]').forEach(el=>{
+    const k=el.getAttribute('data-i'),v=t(k);
+    if(v&&v!==k)el.innerHTML=v;
+  });
+  document.querySelectorAll('option[data-i]').forEach(el=>{
+    const k=el.getAttribute('data-i'),v=t(k);
+    if(v&&v!==k)el.textContent=v;
+  });
+  const isOpen=document.getElementById('calc-body').style.display==='flex';
+  document.getElementById('calc-toggle').innerHTML=(isOpen?'▲ ':'▼ ')+`<span>${isOpen?t('calc_close'):t('calc_open')}</span>`;
+}
+
+document.getElementById('btn-lang').addEventListener('click',()=>{lang=lang==='ja'?'en':'ja';applyI18n();});
+document.getElementById('btn-dark').addEventListener('click',()=>{
+  dark=!dark;
+  document.body.classList.toggle('dark-mode',dark);
+  applyI18n();render();
+  if(trialData.length>=3)drawGR();
+});
+
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const COLS=18,ROWS=8,R=19,DX=R*Math.sqrt(3),DY=R*1.5,OX=22,OY=22;
+let grid=[];
+
+function hexXY(c,r){return[OX+c*DX+(r%2?DX/2:0),OY+r*DY];}
+function hexNeighbors(c,r){
+  const o=r%2;
+  return[[-1,-1+o],[o,-1],[-1,0],[1,0],[-1+o,1],[o,1]]
+    .map(([dc,dr])=>[c+dc,r+dr]).filter(([nc,nr])=>nc>=0&&nc<COLS&&nr>=0&&nr<ROWS);
+}
+function getCell(c,r){return grid.find(g=>g.col===c&&g.row===r);}
+function getCSSVar(v){return getComputedStyle(document.body).getPropertyValue(v).trim();}
+
+function initGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)grid.push({col:c,row:r,state:'normal',str:Math.random()});
+  render();
+}
+
+function drawHex(cx,cy,r,fill){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);i?ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a));}
+  ctx.closePath();ctx.fillStyle=fill;ctx.fill();
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.35)';
+  ctx.lineWidth=0.7;ctx.stroke();
+}
+
+function render(){
+  ctx.fillStyle=getCSSVar('--bg1');ctx.fillRect(0,0,cv.width,cv.height);
+  const cols={
+    normal:getCSSVar('--hex-normal'),shaking:getCSSVar('--hex-shake'),
+    collapsed:getCSSVar('--hex-collapse'),stable:getCSSVar('--hex-stable'),
+    epicenter:dark?'#c8a820':'#1A1A2E'
+  };
+  for(const cell of grid){
+    const[x,y]=hexXY(cell.col,cell.row);
+    drawHex(x,y,R-1,cols[cell.state]||cols.normal);
+    if(cell.state==='collapsed'){
+      ctx.fillStyle=dark?'rgba(255,255,255,0.4)':'rgba(255,255,255,0.6)';
+      ctx.font='10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('×',x,y);
+    }
+    if(cell.state==='epicenter'){
+      ctx.fillStyle=dark?'#1a1a1a':'#FFE066';
+      ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('★',x,y);
+    }
+  }
+}
+
+function getBaseP(){const s=document.getElementById('sel-strength').value;return s==='hard'?0.55:s==='soft'?1.8:1.0;}
+function cellCollapseP(cell,wm){
+  const p0=parseFloat(document.getElementById('sel-prob').value);
+  return Math.min(0.92,Math.max(0.02,p0*Math.pow(10,0.5*(wm-4))*getBaseP()*(0.4+0.6*cell.str)));
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function updateCalcPanel(collapsed,M){
+  const S=Math.max(0.01,collapsed*0.25),logS=Math.log10(S),ratio=Math.pow(10,1.5*(M-5.0));
+  const ci=M<4?0:M<5?1:M<6?2:M<7?3:4;
+  document.getElementById('step-waiting').style.display='none';
+  const steps=document.getElementById('steps');
+  steps.style.display='flex';steps.style.flexDirection='column';steps.style.gap='10px';
+  document.getElementById('c-cells').textContent=collapsed;
+  document.getElementById('c-cells2').textContent=collapsed;
+  document.getElementById('c-S').textContent=S.toFixed(2)+' km²';
+  document.getElementById('c-S2').textContent=S.toFixed(2);
+  document.getElementById('c-logS').textContent=logS.toFixed(3);
+  document.getElementById('c-Mw').textContent=M.toFixed(2);
+  document.getElementById('c-Mw2').textContent=M.toFixed(2);
+  const rv=ratio<0.01?ratio.toExponential(2):ratio<10?ratio.toFixed(2):Math.round(ratio).toLocaleString();
+  document.getElementById('c-eratio').textContent=rv;
+  document.getElementById('c-comment').textContent='→ '+t('comment')[ci];
+}
+
+async function runSim(ec,er,fast=false){
+  if(animating)return;animating=true;
+  for(const g of grid)g.state='normal';
+  const epi=getCell(ec,er);if(!epi){animating=false;return;}
+  epi.state='epicenter';if(!fast)render();
+  let q=hexNeighbors(ec,er).map(([c,r])=>[c,r,0]),visited=new Set([`${ec},${er}`]),collapsed=0;
+  while(q.length){
+    const nq=[];
+    for(const[c,r,wave]of q){
+      const k=`${c},${r}`;if(visited.has(k))continue;visited.add(k);
+      const cell=getCell(c,r);if(!cell||cell.state!=='normal')continue;
+      const wm=Math.max(2,5-wave*0.2);
+      if(!fast){cell.state='shaking';render();await sleep(25);}
+      if(Math.random()<cellCollapseP(cell,wm)){
+        cell.state='collapsed';collapsed++;
+        hexNeighbors(c,r).forEach(([nc,nr])=>{
+          const nk=`${nc},${nr}`;
+          if(!visited.has(nk)){const nc2=getCell(nc,nr);if(nc2&&nc2.state==='normal')nq.push([nc,nr,wave+1]);}
+        });
+      }else{cell.state='stable';}
+      if(!fast&&wave<3){render();await sleep(15);}
+    }
+    q=nq;if(!fast&&q.length)await sleep(35);
+  }
+  if(!fast)render();
+  const S=Math.max(0.01,collapsed*0.25);
+  const M=parseFloat((Math.max(1.5,0.98*Math.log10(S)+4.07+Math.random()*0.2-0.1)).toFixed(2));
+  document.getElementById('v-cells').textContent=collapsed;
+  document.getElementById('v-mag').textContent='M'+M.toFixed(1);
+  trialData.push({collapsed,M});
+  document.getElementById('v-trials').textContent=trialData.length;
+  const maxM=Math.max(...trialData.map(d=>d.M));
+  document.getElementById('v-maxmag').textContent='M'+maxM.toFixed(1);
+  if(!fast)updateCalcPanel(collapsed,M);
+  if(M>=5.0)drawOmori(M);
+  drawGR();animating=false;return M;
+}
+
+cv.addEventListener('click',e=>{
+  if(animating)return;
+  const rect=cv.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)*(cv.width/rect.width),my=(e.clientY-rect.top)*(cv.height/rect.height);
+  let best=null,bd=Infinity;
+  for(const cell of grid){const[x,y]=hexXY(cell.col,cell.row);const d=Math.hypot(mx-x,my-y);if(d<bd){bd=d;best=cell;}}
+  if(best&&bd<R*1.3)runSim(best.col,best.row,false);
+});
+
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  if(animating)return;trialData=[];
+  ['v-cells','v-mag','v-maxmag'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('v-trials').textContent='0';
+  document.getElementById('step-waiting').style.display='';
+  document.getElementById('steps').style.display='none';
+  initGrid();
+  ['chart-gr','chart-omori'].forEach(id=>{const c=document.getElementById(id);c.getContext('2d').clearRect(0,0,c.width,c.height);});
+  document.getElementById('chart-info').innerHTML=t('gr_hint');
+  document.getElementById('chart-info-omori').innerHTML=t('omori_hint');
+});
+
+document.getElementById('btn-auto').addEventListener('click',async()=>{
+  if(animating)return;animating=true;
+  for(let i=0;i<100;i++){animating=false;await runSim(Math.floor(Math.random()*COLS),Math.floor(Math.random()*ROWS),true);await sleep(5);}
+  render();animating=false;
+});
+
+document.getElementById('calc-header').addEventListener('click',()=>{
+  const body=document.getElementById('calc-body'),tog=document.getElementById('calc-toggle');
+  const opening=body.style.display==='none'||body.style.display==='';
+  body.style.display=opening?'flex':'none';
+  if(opening){body.style.flexDirection='column';body.style.gap='10px';}
+  tog.innerHTML=(opening?'▲ ':'▼ ')+`<span>${opening?t('calc_close'):t('calc_open')}</span>`;
+});
+
+document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));tb.classList.add('active');
+  document.getElementById('tab-gr').style.display=tb.dataset.tab==='gr'?'':'none';
+  document.getElementById('tab-omori').style.display=tb.dataset.tab==='omori'?'':'none';
+}));
+
+function cc(){
+  return{
+    grid:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)',
+    text:dark?'#999':'#666',
+    l1:dark?'#5B9BD5':'#185FA5',
+    l2:dark?'#e05a4a':'#C83C2D',
+    l3:dark?'#f4a340':'#d4780a'
+  };
+}
+
+function drawGR(){
+  const c=document.getElementById('chart-gr'),x2=c.getContext('2d');
+  x2.clearRect(0,0,c.width,c.height);x2.fillStyle=getCSSVar('--bg0');x2.fillRect(0,0,c.width,c.height);
+  if(trialData.length<3)return;
+  const W=c.width,H=c.height,P={t:20,r:20,b:44,l:56},IW=W-P.l-P.r,IH=H-P.t-P.b,col=cc();
+  const bins={};
+  for(const{M}of trialData){const b=Math.floor(M/0.5)*0.5;bins[b]=(bins[b]||0)+1;}
+  const mVals=Object.keys(bins).map(Number).sort((a,b)=>a-b);
+  const cum={};let sum=0;
+  for(let i=mVals.length-1;i>=0;i--){sum+=bins[mVals[i]];cum[mVals[i]]=sum;}
+  const logMax=Math.log10(Math.max(...Object.values(cum)));
+  const mMin=Math.min(...mVals)-0.3,mMax=Math.max(...mVals)+0.3;
+  x2.strokeStyle=col.grid;x2.lineWidth=0.5;
+  for(let g=0;g<=Math.ceil(logMax);g++){const y=P.t+IH*(1-g/Math.max(1,logMax));x2.beginPath();x2.moveTo(P.l,y);x2.lineTo(P.l+IW,y);x2.stroke();}
+  x2.fillStyle=col.text;x2.font='10px sans-serif';x2.textAlign='right';
+  for(let g=0;g<=Math.ceil(logMax);g++){const y=P.t+IH*(1-g/Math.max(1,logMax));x2.fillText(g===0?'1':g===1?'10':g===2?'100':'10^'+g,P.l-4,y+3);}
+  x2.textAlign='center';
+  for(let m=Math.ceil(mMin);m<=Math.floor(mMax)+1;m++){x2.fillText('M'+m,P.l+IW*((m-mMin)/(mMax-mMin)),H-P.b+14);}
+  x2.strokeStyle=col.l1;x2.lineWidth=2;x2.beginPath();let first=true;
+  for(const m of mVals){if(!cum[m])continue;const x=P.l+IW*((m-mMin)/(mMax-mMin)),y=P.t+IH*(1-Math.log10(cum[m])/Math.max(1,logMax));first?(x2.moveTo(x,y),first=false):x2.lineTo(x,y);}
+  x2.stroke();
+  const xs=mVals.filter(m=>cum[m]>=2),ys=xs.map(m=>Math.log10(cum[m]));
+  if(xs.length>=2){
+    const n=xs.length,sx=xs.reduce((a,b)=>a+b,0),sy=ys.reduce((a,b)=>a+b,0);
+    const sxy=xs.reduce((a,m,i)=>a+m*ys[i],0),sx2=xs.reduce((a,m)=>a+m*m,0);
+    const bv=-(n*sxy-sx*sy)/(n*sx2-sx*sx),av=(sy+bv*sx)/n;
+    x2.strokeStyle=col.l2;x2.lineWidth=1.2;x2.setLineDash([4,3]);x2.beginPath();
+    [mMin,mMax].forEach((m,i)=>{const y=P.t+IH*(1-(av-bv*m)/Math.max(1,logMax));i?x2.lineTo(P.l+IW*((m-mMin)/(mMax-mMin)),y):x2.moveTo(P.l+IW*((m-mMin)/(mMax-mMin)),y);});
+    x2.stroke();x2.setLineDash([]);
+    x2.fillStyle=col.l2;x2.font='11px sans-serif';x2.textAlign='left';
+    x2.fillText('b = '+Math.abs(bv).toFixed(2),P.l+6,P.t+14);
+    document.getElementById('chart-info').innerHTML=t('gr_result')(Math.abs(bv).toFixed(2),trialData.length,Math.max(...trialData.map(d=>d.M)).toFixed(1));
+  }
+  x2.fillStyle=col.text;x2.font='10px sans-serif';x2.textAlign='center';
+  x2.fillText(t('gr_label_x'),P.l+IW/2,H-4);
+  x2.save();x2.translate(12,P.t+IH/2);x2.rotate(-Math.PI/2);x2.fillText(t('gr_label_y'),0,0);x2.restore();
+}
+
+function drawOmori(mainM){
+  const c=document.getElementById('chart-omori'),x2=c.getContext('2d');
+  x2.clearRect(0,0,c.width,c.height);x2.fillStyle=getCSSVar('--bg0');x2.fillRect(0,0,c.width,c.height);
+  const W=c.width,H=c.height,P={t:20,r:20,b:44,l:56},IW=W-P.l-P.r,IH=H-P.t-P.b,col=cc();
+  const k=Math.pow(10,0.5*(mainM-3)),c0=0.1,p=1.1,days=60,pts=200,maxN=k/Math.pow(c0+0.01,p);
+  x2.strokeStyle=col.grid;x2.lineWidth=0.5;
+  for(let g=0;g<=4;g++){const y=P.t+IH*(g/4);x2.beginPath();x2.moveTo(P.l,y);x2.lineTo(P.l+IW,y);x2.stroke();}
+  x2.strokeStyle=col.l3;x2.lineWidth=2;x2.beginPath();
+  for(let i=0;i<=pts;i++){const t2=days*(i/pts),n=k/Math.pow(c0+t2,p),x=P.l+IW*(t2/days),y=P.t+IH*(1-Math.min(1,n/maxN));i?x2.lineTo(x,y):x2.moveTo(x,y);}
+  x2.stroke();
+  x2.fillStyle=col.text;x2.font='10px sans-serif';x2.textAlign='center';
+  [0,10,20,30,40,50,60].forEach(d=>{x2.fillText(d+t('day'),P.l+IW*(d/days),H-P.b+14);});
+  x2.fillStyle=col.l3;x2.font='11px sans-serif';x2.textAlign='left';
+  x2.fillText('n(t)=k/(c+t)^p  M'+mainM.toFixed(1),P.l+6,P.t+14);
+  const r7=(k/Math.pow(c0+7,p))/(k/Math.pow(c0+0.5,p))*100,r30=(k/Math.pow(c0+30,p))/(k/Math.pow(c0+0.5,p))*100;
+  document.getElementById('chart-info-omori').innerHTML=t('omori_result')(mainM.toFixed(1),r7.toFixed(0),r30.toFixed(0),(mainM-1.2).toFixed(1));
+  x2.fillStyle=col.text;x2.font='10px sans-serif';x2.textAlign='center';
+  x2.fillText(t('omori_label_x'),P.l+IW/2,H-4);
+  x2.save();x2.translate(12,P.t+IH/2);x2.rotate(-Math.PI/2);x2.fillText(t('omori_label_y'),0,0);x2.restore();
+}
+
+applyI18n();initGrid();
+</script>
+</body>
+</html>
